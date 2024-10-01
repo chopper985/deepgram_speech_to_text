@@ -14,7 +14,7 @@ export 'types.dart';
 class DeepgramLiveTranscriber {
   /// Create a live transcriber with a start and close method
   DeepgramLiveTranscriber(this.apiKey,
-      {required this.inputAudioStream, this.queryParams});
+      {required this.inputAudioStream, this.queryParams, this.replace});
 
   /// if transcriber was closed
   bool _isClosed = false;
@@ -34,6 +34,9 @@ class DeepgramLiveTranscriber {
   /// The additionals query parameters.
   final Map<String, dynamic>? queryParams;
 
+  // To enable Find and Replace, use the following parameter in the querystring
+  final List<String>? replace;
+
   final String _baseLiveUrl = 'wss://api.deepgram.com/v1/listen';
   final StreamController<DeepgramSttResult> _outputTranscriptStream =
       StreamController<DeepgramSttResult>();
@@ -42,8 +45,24 @@ class DeepgramLiveTranscriber {
 
   /// Start the transcription process.
   Future<void> start() async {
+    Uri uri = buildUrl(_baseLiveUrl, null, queryParams);
+
+    if (replace != null && replace!.isNotEmpty) {
+      String replaceQuery = "";
+
+      for (var item in replace!) {
+        replaceQuery += "&replace=$item";
+      }
+
+      if (uri.query.isEmpty && replaceQuery.startsWith("&")) {
+        replaceQuery.replaceFirst("&", "");
+      }
+
+      uri = uri.replace(query: uri.query + replaceQuery);
+    }
+
     _wsChannel = WebSocketChannel.connect(
-      buildUrl(_baseLiveUrl, null, queryParams),
+      uri,
       protocols: ['token', apiKey],
     );
 
@@ -269,11 +288,17 @@ class Deepgram {
   /// see [DeepgramLiveTranscriber] which you can also use directly
   ///
   /// https://developers.deepgram.com/reference/listen-live
-  DeepgramLiveTranscriber createLiveTranscriber(Stream<List<int>> audioStream,
-      {Map<String, dynamic>? queryParams}) {
-    return DeepgramLiveTranscriber(apiKey,
-        inputAudioStream: audioStream,
-        queryParams: mergeMaps(baseQueryParams, queryParams));
+  DeepgramLiveTranscriber createLiveTranscriber(
+    Stream<List<int>> audioStream, {
+    Map<String, dynamic>? queryParams,
+    List<String>? replace,
+  }) {
+    return DeepgramLiveTranscriber(
+      apiKey,
+      inputAudioStream: audioStream,
+      queryParams: mergeMaps(baseQueryParams, queryParams),
+      replace: replace,
+    );
   }
 
   /// Transcribe a live audio stream.
